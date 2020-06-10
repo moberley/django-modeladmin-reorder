@@ -172,7 +172,7 @@ class ModelAdminReorderMiddleware:
             return response
 
         try:
-            app_list = response.context_data['app_list']
+            self.app_list = response.context_data['app_list']
         except KeyError:
             # there is no app_list! nothing to reorder
             return response
