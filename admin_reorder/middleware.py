@@ -12,7 +12,8 @@ from django.urls import resolve, Resolver404
 class ModelAdminReorderMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
-
+        # One-time configuration and initialization.
+        
         self.config = getattr(settings, 'ADMIN_REORDER', None)
         if not self.config:
             # ADMIN_REORDER settings is not defined.
@@ -127,20 +128,20 @@ class ModelAdminReorderMiddleware:
         except AttributeError:
             # not an admin site
             return
-        
+
         if admin_site.name in self.config:
             self.admin_site_name = admin_site.name
         else:
-            # no ordering set for this site
+            # no order set for this site
             return
-        
+
         try:
             # try to get all installed models
             self.app_list = admin_site.index(request).context_data['app_list']
         except KeyError:
             # no app_list in the view context
             return
-        
+    
         # Flatten all models from apps
         self.models_list = []
         for app in self.app_list:
