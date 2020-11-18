@@ -8,12 +8,16 @@ from django.core.exceptions import ImproperlyConfigured
 
 from django.urls import resolve, Resolver404
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 class ModelAdminReorderMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
         # One-time configuration and initialization.
-        
+        self.admin_site_name = 'admin'
+
         self.config = getattr(settings, 'ADMIN_REORDER', None)
         if not self.config:
             # ADMIN_REORDER settings is not defined.
@@ -33,7 +37,8 @@ class ModelAdminReorderMiddleware:
     
     def __call__(self, request):
         # executed for each request before the view (and later middleware) are called.
-        self.admin_site_name = 'admin'
+        if hasattr(request, 'current_app'):
+            self.admin_site_name = request.current_app
         return self.get_response(request)
 
     def get_app_list(self):
@@ -141,7 +146,10 @@ class ModelAdminReorderMiddleware:
         except KeyError:
             # no app_list in the view context
             return
+
+        self.fill_models_list()
     
+    def fill_models_list(self):
         # Flatten all models from apps
         self.models_list = []
         for app in self.app_list:
@@ -151,9 +159,8 @@ class ModelAdminReorderMiddleware:
                 self.models_list.append(model)
     
     def process_template_response(self, request, response):
-        if self.admin_site_name is None:
-            # no configuration available
-            return response
+        if hasattr(request, 'current_app'):
+            self.admin_site_name = request.current_app
 
         try:
             url = resolve(request.path_info)
@@ -175,6 +182,7 @@ class ModelAdminReorderMiddleware:
         else:  # nothing to reorder, return response
             return response
 
+        self.fill_models_list()
         ordered_app_list = self.get_app_list()
         response.context_data[context_key] = ordered_app_list
         return response
