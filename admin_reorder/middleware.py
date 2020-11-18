@@ -8,9 +8,6 @@ from django.core.exceptions import ImproperlyConfigured
 
 from django.urls import resolve, Resolver404
 
-import logging
-logger = logging.getLogger(__name__)
-
 
 class ModelAdminReorderMiddleware:
     def __init__(self, get_response):
