@@ -33,7 +33,7 @@ class ModelAdminReorderMiddleware:
     def __call__(self, request):
         # Code to be executed for each request before
         # the view (and later middleware) are called.
-        self.admin_site_name = None
+        self.admin_site_name = 'admin'
 
         response = self.get_response(request)
 
@@ -42,9 +42,9 @@ class ModelAdminReorderMiddleware:
 
         return response
     
-    def get_app_list(self, admin_site_name):
+    def get_app_list(self):
         ordered_app_list = []
-        for app_config in self.config[admin_site_name]:
+        for app_config in self.config[self.admin_site_name]:
             app = self.make_app(app_config)
             if app:
                 ordered_app_list.append(app)
