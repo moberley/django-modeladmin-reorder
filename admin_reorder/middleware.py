@@ -1,39 +1,46 @@
+# -*- coding: utf-8 -*-
+
 from copy import deepcopy
 
 from django.conf import settings
 from django.contrib import admin
 from django.core.exceptions import ImproperlyConfigured
 
-try:
-    from django.urls import resolve, Resolver404
-except ModuleNotFoundError:
-    # Deprecated since Django 1.10, removed in Django 2.0
-    from django.urls.urlresolvers import resolve, Resolver404
-
-try:
-    from django.utils.deprecation import MiddlewareMixin
-except ImportError:
-    # Not required for Django <= 1.9, see:
-    # https://docs.djangoproject.com/en/1.10/topics/http/middleware/#upgrading-pre-django-1-10-style-middleware
-    MiddlewareMixin = object
+from django.urls import resolve, Resolver404
 
 
-class ModelAdminReorder(MiddlewareMixin):
+class ModelAdminReorderMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
 
-    def init_config(self, request, app_list):
-        self.request = request
-        self.app_list = app_list
+# REMOVE        
+#    def init_config(self, request, app_list):
+#        self.request = request
+#        self.app_list = app_list
 
         self.config = getattr(settings, 'ADMIN_REORDER', None)
         if not self.config:
             # ADMIN_REORDER settings is not defined.
             raise ImproperlyConfigured('ADMIN_REORDER config is not defined.')
 
-        if not isinstance(self.config, (tuple, list)):
+        # ADMIN_REORDER should be a dict keyed to admin sites
+        if not isinstance(self.config, (dict)):
             raise ImproperlyConfigured(
-                'ADMIN_REORDER config parameter must be tuple or list. '
+                'ADMIN_REORDER config parameter must be a dict. '
                 'Got {config}'.format(config=self.config))
+        else:
+            tested = [isinstance(v, (tuple, list)) for v in self.config.values()]
+            if sum(tested) != len(self.config.values()):
+                raise ImproperlyConfigured(
+                    'ADMIN_REORDER config must be a dict with tuple or list values. '
+                    'Got {config}'.format(config=self.config))
+    
+    def __call__(self, request):
+        # executed for each request before the view (and later middleware) are called.
+        self.admin_site_name = None
+        return self.get_response(request)
 
+        """REMOVE
         admin_index = admin.site.index(request)
         try:
             # try to get all installed models
@@ -49,10 +56,11 @@ class ModelAdminReorder(MiddlewareMixin):
                 model['model_name'] = self.get_model_name(
                     app['app_label'], model['object_name'])
                 self.models_list.append(model)
+        """
 
     def get_app_list(self):
         ordered_app_list = []
-        for app_config in self.config:
+        for app_config in self.config[self.admin_site_name or '']:
             app = self.make_app(app_config)
             if app:
                 ordered_app_list.append(app)
@@ -134,8 +142,40 @@ class ModelAdminReorder(MiddlewareMixin):
         if model:
             model['name'] = model_config['label']
             return model
-
+    
+    def process_view(self, request, view_func, *args, **kwargs):
+        try:
+            admin_site = view_func.admin_site
+        except AttributeError:
+            # not an admin site
+            return
+        
+        if admin_site.name in self.config:
+            self.admin_site_name = admin_site.name
+        else:
+            # no ordering set for this site
+            return
+        
+        try:
+            # try to get all installed models
+            self.app_list = admin_site.index(request).context_data['app_list']
+        except KeyError:
+            # no app_list in the view context
+            return
+        
+        # Flatten all models from apps
+        self.models_list = []
+        for app in self.app_list:
+            for model in app['models']:
+                model['model_name'] = self.get_model_name(
+                    app['app_label'], model['object_name'])
+                self.models_list.append(model)
+    
     def process_template_response(self, request, response):
+        if self.admin_site_name is None:
+            # no configuration available
+            return response
+
         try:
             url = resolve(request.path_info)
         except Resolver404:
@@ -147,16 +187,15 @@ class ModelAdminReorder(MiddlewareMixin):
             return response
 
         if 'app_list' in response.context_data:
-            app_list = response.context_data['app_list']
+            self.app_list = response.context_data['app_list']
             context_key = 'app_list'
         # handle django 3.1 sidebar
         elif 'available_apps' in response.context_data:
-            app_list = response.context_data['available_apps']
+            self.app_list = response.context_data['available_apps']
             context_key = 'available_apps'
         else:  # nothing to reorder, return response
             return response
 
-        self.init_config(request, app_list)
         ordered_app_list = self.get_app_list()
         response.context_data[context_key] = ordered_app_list
         return response
