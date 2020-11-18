@@ -13,11 +13,6 @@ class ModelAdminReorderMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
 
-# REMOVE        
-#    def init_config(self, request, app_list):
-#        self.request = request
-#        self.app_list = app_list
-
         self.config = getattr(settings, 'ADMIN_REORDER', None)
         if not self.config:
             # ADMIN_REORDER settings is not defined.
@@ -37,33 +32,16 @@ class ModelAdminReorderMiddleware:
     
     def __call__(self, request):
         # executed for each request before the view (and later middleware) are called.
-        self.admin_site_name = None
+        self.admin_site_name = 'admin'
         return self.get_response(request)
-
-        """REMOVE
-        admin_index = admin.site.index(request)
-        try:
-            # try to get all installed models
-            app_list = admin_index.context_data['app_list']
-        except KeyError:
-            # use app_list from context if this fails
-            pass
-
-        # Flatten all models from apps
-        self.models_list = []
-        for app in app_list:
-            for model in app['models']:
-                model['model_name'] = self.get_model_name(
-                    app['app_label'], model['object_name'])
-                self.models_list.append(model)
-        """
 
     def get_app_list(self):
         ordered_app_list = []
-        for app_config in self.config[self.admin_site_name or '']:
-            app = self.make_app(app_config)
-            if app:
-                ordered_app_list.append(app)
+        if self.admin_site_name in self.config:
+            for app_config in self.config[self.admin_site_name]:
+                app = self.make_app(app_config)
+                if app:
+                    ordered_app_list.append(app)
         return ordered_app_list
 
     def make_app(self, app_config):
