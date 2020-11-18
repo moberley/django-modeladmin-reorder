@@ -45,6 +45,8 @@ class ModelAdminReorderMiddleware:
                 app = self.make_app(app_config)
                 if app:
                     ordered_app_list.append(app)
+        else:
+            ordered_app_list = self.app_list
         return ordered_app_list
 
     def make_app(self, app_config):
